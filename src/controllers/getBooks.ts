@@ -33,9 +33,9 @@ class BookController {
         this.connection.connect();
         this.router = Router();
         this.router.get('/', this.getAllBooks.bind(this));
-        this.router.get('/:id', this.addBook.bind(this));
+        this.router.get('/b/:isbn:title:pagecount', this.addBook.bind(this));
     }
-    async retrieveBooks(): Promise<Book[]> {
+    async retrieveAllBooksFromDB(): Promise<Book[]> {
         return new Promise((resolve, reject) => {
             const request = new tdRequest(
                 'SELECT * FROM Book',
@@ -64,16 +64,58 @@ class BookController {
         });
     }
     async getAllBooks(req: Request, res: Response) {
-        // TODO: implement functionality
-        const retrievedBooks = await this.retrieveBooks();
+        const retrievedBooks = await this.retrieveAllBooksFromDB();
         return res.status(200).json({
             status: 'OK',
             books: retrievedBooks,
         });
     }
+    async insertNewBookIntoDB(
+        ISBN: string,
+        title: string,
+        pageCount: number | undefined = undefined,
+    ) {
+        const notNullPageCount = pageCount === undefined ? 0 : pageCount;
+        return new Promise((resolve, reject) => {
+            const request = new tdRequest(
+                'INSERT INTO Book VALUES (' +
+                    ISBN +
+                    ',' +
+                    title +
+                    ',' +
+                    notNullPageCount +
+                    ')',
+                (error, rowCount) => {
+                    if (error !== undefined) {
+                        console.log(
+                            'Error: ' + error + ' row count ' + rowCount,
+                        );
+                        reject();
+                    }
+                },
+            );
+            this.connection.execSql(request);
+            request.on('requestCompleted', () => {
+                resolve(ISBN);
+            });
+        });
+    }
     async addBook(req: Request, res: Response) {
+        console.log(req.params);
+        if (req.params.isbn === undefined || req.params.title === undefined) {
+            return res.status(500).json({
+                status: 'FAIL',
+                description: 'Invalid parameters for new book',
+            });
+        }
+        const addedISBN = await this.insertNewBookIntoDB(
+            req.params.isbn,
+            req.params.title,
+            parseInt(req.params.pagecount),
+        );
         return res.status(200).json({
             status: 'OK',
+            ISBN: addedISBN,
         });
     }
 }
